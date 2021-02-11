@@ -133,6 +133,14 @@ export class Item extends Array {
         return `\x1b[48;5;233m ${SymbolToString(sym)} \x1b[0m`;
     }
 
+    toEND() {
+        const item = this.decrement();
+
+        item[ItemIndex.offset] = item[ItemIndex.length];
+
+        return item;
+    }
+
     increment(): Item | null {
         if (this.offset < this.len) {
 

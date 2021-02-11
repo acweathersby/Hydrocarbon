@@ -175,7 +175,7 @@ export function getSkipFunctionNew(
     return <VarSC>fn_ref;
 }
 
-export function createBranchFunction(items: Item[], branch_code: SC, grammar: Grammar, runner: Helper): VarSC {
+export function createBranchFunction(items, branch_code: SC, grammar: Grammar, runner: Helper): VarSC {
 
     let fn_ref = getGlobalObject("branch", items, runner);
 
@@ -190,7 +190,7 @@ export function createBranchFunction(items: Item[], branch_code: SC, grammar: Gr
                 "state:u32",
                 "prod:u32"
             ).addStatement(
-                (runner.ANNOTATED)
+                (runner.ANNOTATED && Array.isArray(items))
                     ? items.map(i => i.renderUnformattedWithProduction(grammar)).join("\n")
                     : undefined,
                 branch_code
@@ -715,13 +715,13 @@ export function getTrueSymbolValue(sym: TokenSymbol, grammar: Grammar): TokenSym
 /**
  * 
  */
-export function packGlobalFunction(fn_class: string, fn_type: string, unique_objects: (Symbol | Item)[], fn: SC, helper: Helper) {
+export function packGlobalFunction(fn_class: string, fn_type: string, unique_objects: ((Symbol | Item)[] | SC), fn: SC, helper: Helper) {
     const string_name = getGloballyConsistentName(fn_class, unique_objects);
     const function_name = SC.Variable(string_name + ":" + fn_type);
     return helper.add_constant(function_name, fn);
 }
 
-function getGlobalObject(fn_class: string, unique_objects: (Symbol | Item)[], runner: Helper) {
+function getGlobalObject(fn_class: string, unique_objects: ((Symbol | Item)[] | SC), runner: Helper) {
     const name = getGloballyConsistentName(fn_class, unique_objects);
 
     return runner.constant_map.has(name)
@@ -732,17 +732,23 @@ function getGlobalObject(fn_class: string, unique_objects: (Symbol | Item)[], ru
  * Generate a function name that is consistent amongst
  * all workers. 
  */
-export function getGloballyConsistentName(prepend_js_identifier: string, unique_objects: (Symbol | Item)[]): string {
+export function getGloballyConsistentName(prepend_js_identifier: string, unique_objects: ((Symbol | Item)[] | SC)): string {
 
     let string_to_hash = "";
-    if (This_Is_An_Item_Array(unique_objects)) {
-        string_to_hash = unique_objects.map(i => i.id).setFilter().sort().join("");
+    if ((unique_objects instanceof SC)) {
+        string_to_hash = unique_objects.hash();
     } else {
-        string_to_hash = (<Symbol[]>unique_objects).map(getUniqueSymbolName).setFilter().sort().join("");
+        if (This_Is_An_Item_Array(unique_objects)) {
+            string_to_hash = unique_objects.map(i => i.id).setFilter().sort().join("");
+        } else {
+            string_to_hash = (<Symbol[]>unique_objects).map(getUniqueSymbolName).setFilter().sort().join("");
+        }
+
+        string_to_hash = crypto.createHash('md5').update(string_to_hash).digest("hex");
     }
 
 
-    return `${prepend_js_identifier}_${crypto.createHash('md5').update(string_to_hash).digest("hex").slice(0, 16)}`;
+    return `${prepend_js_identifier}_${string_to_hash.slice(0, 16)}`;
 }
 
 function This_Is_An_Item_Array(input: any[]): input is Item[] {

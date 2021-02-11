@@ -1,17 +1,16 @@
 import { RenderBodyOptions } from "../../types/render_body_options";
-import { MultiItemReturnObject } from "../../types/transition_generating";
 import { Symbol } from "../../types/symbol.js";
+import { MultiItemReturnObject } from "../../types/transition_generating";
 import { Leaf, TransitionNode, TRANSITION_TYPE } from "../../types/transition_node.js";
-import { packGlobalFunction } from "../../utilities/code_generating.js";
+import { createBranchFunction, packGlobalFunction } from "../../utilities/code_generating.js";
 import { rec_glob_lex_name, rec_state, rec_state_prod } from "../../utilities/global_names.js";
-import { Item, ItemIndex, itemsToProductions } from "../../utilities/item.js";
+import { Item, ItemIndex } from "../../utilities/item.js";
 import { renderItem } from "../../utilities/render_item.js";
 import { SC } from "../../utilities/skribble.js";
 import { getUniqueSymbolName, Sym_Is_A_Production } from "../../utilities/symbol.js";
+import { createVirtualProductions, VirtualProductionLinks } from "../../utilities/virtual_productions.js";
 import { compileProductionFunctions } from "../function_constructor.js";
 import { addVirtualProductionLeafStatements } from "./add_leaf_statements.js";
-import { processProductionChain } from "./process_production_reduction_sequences.js";
-import { createVirtualProductions, VirtualProductionLinks } from "../../utilities/virtual_productions.js";
 
 export function default_resolveUnresolvedLeaves(node: TransitionNode, nodes: TransitionNode[], options: RenderBodyOptions): MultiItemReturnObject {
 
@@ -43,45 +42,71 @@ export function default_resolveUnresolvedLeaves(node: TransitionNode, nodes: Tra
         out_leaves: Leaf[] = [];
 
     let FALLBACK_REQUIRED = items.every(i => i.atEND);
-
+    let v_depth = options.IS_VIRTUAL;
     if (!FALLBACK_REQUIRED)
         try {
             createVirtualProductionSequence(options, items, expected_symbols, root, out_leaves, out_prods);
-
         } catch (e) {
+            //throw e;
+            if (v_depth > 0) throw e;
+            console.dir({ v_depth });
             root.statements.length = 0;
-            root.addStatement(e.stack);
+            //root.addStatement(e.stack);
             FALLBACK_REQUIRED = true;
         }
 
+
+
     if (FALLBACK_REQUIRED) {
 
+        const USE_BACKTRACKING = false;
+        const USE_FORKING = true;
 
-        root.addStatement(
-            SC.Declare(
-                SC.Assignment("mk:int", SC.Call("mark")),
-                SC.Assignment("anchor:Lexer", SC.Call(SC.Member(rec_glob_lex_name, "copy"))),
-                SC.Assignment(anchor_state, rec_state)
-            ));
+        let leaf = root, I = 0;// prev_prods;
 
-        let leaf = root, FIRST = true;// prev_prods;
+        const output_nodes = nodes.filter(i => i.transition_type !== TRANSITION_TYPE.IGNORE);
 
-        for (const { code, items, prods, leaves } of nodes.filter(i => i.transition_type !== TRANSITION_TYPE.IGNORE)) {
+        if (USE_BACKTRACKING) {
 
+            root.addStatement(
+                SC.Declare(
+                    SC.Assignment("mk:int", SC.Call("mark")),
+                    SC.Assignment("anchor:Lexer", SC.Call(SC.Member(rec_glob_lex_name, "copy"))),
+                    SC.Assignment(anchor_state, rec_state)
+                ));
 
-            out_prods.push(...prods);
-            out_leaves.push(...leaves);
+            for (const { code, items, prods, leaves } of output_nodes) {
 
-            leaf.addStatement(SC.Comment(items));
+                out_prods.push(...prods);
 
-            if (FIRST) {
+                out_leaves.push(...leaves);
 
-                leaf.addStatement(
-                    SC.Comment(prods),
-                    code
-                );
+                leaf.addStatement(SC.Comment(items));
 
-            } else {
+                if (I++ == 0) {
+
+                    leaf.addStatement(
+                        SC.Comment(prods),
+                        code
+                    );
+
+                } else {
+                    leaf.addStatement(
+                        SC.Assignment(rec_state, SC.Call(
+                            "reset:bool",
+                            "mk",
+                            "anchor:Lexer",
+                            rec_glob_lex_name,
+                            anchor_state
+                        )),
+                        code,
+                        SC.Empty()
+                    );
+
+                }
+            }
+
+            if (IS_LEFT_RECURSIVE_WITH_FOREIGN_PRODUCTION_ITEMS) {
                 leaf.addStatement(
                     SC.Assignment(rec_state, SC.Call(
                         "reset:bool",
@@ -90,27 +115,36 @@ export function default_resolveUnresolvedLeaves(node: TransitionNode, nodes: Tra
                         rec_glob_lex_name,
                         anchor_state
                     )),
-                    code,
                     SC.Empty()
                 );
+            }
+        } else if (USE_FORKING) {
 
+            for (const { code, items, prods, leaves } of output_nodes) {
+
+                out_prods.push(...prods);
+                out_leaves.push(...leaves);
+
+                leaf.addStatement(items.map(i => i.renderUnformattedWithProduction(options.grammar)).join("\n"));
+
+                const call_name = createBranchFunction(code, code, options.grammar, options.helper);
+
+                if (I++ == output_nodes.length - 1) {
+
+                    leaf.addStatement(
+                        SC.Call("pushFN", "data", call_name),
+                    );
+
+                } else {
+                    leaf.addStatement(SC.If().addStatement(
+                        SC.Value("const fk = fork(data);"),
+                        SC.Call("pushFN", "fk", call_name),
+                    ));
+                }
             }
 
-            FIRST = false;
-        }
-
-        if (IS_LEFT_RECURSIVE_WITH_FOREIGN_PRODUCTION_ITEMS) {
-            leaf.addStatement(
-                SC.Assignment(rec_state, SC.Call(
-                    "reset:bool",
-                    "mk",
-                    "anchor:Lexer",
-                    rec_glob_lex_name,
-                    anchor_state
-                )),
-                SC.Empty()
-            );
-        }
+            leaf.addStatement(SC.UnaryPre(SC.Return, SC.Value("0")));
+        } else throw new Error(`Unable to resolve parsing ambiguities \n${items.map(i => i.renderUnformattedWithProduction(options.grammar)).join("\n")} `);
     }
 
     return { root, leaves: out_leaves, prods: out_prods.setFilter() };
@@ -133,7 +167,8 @@ export function createVirtualProductionSequence(
      * 
      */
     ALLOCATE_FUNCTION: boolean = false,
-    transition_type: TRANSITION_TYPE = TRANSITION_TYPE.ASSERT_END
+    transition_type: TRANSITION_TYPE = TRANSITION_TYPE.ASSERT_END,
+    CLEAN = false
 ) {
     const
         { grammar } = options,
@@ -146,7 +181,7 @@ export function createVirtualProductionSequence(
             options.helper,
             Array.from(virtual_links.values()).map(({ p }) => p),
             expected_symbols,
-            true
+            (CLEAN ? 1 : options.IS_VIRTUAL + 1)
         );
 
     addVirtualProductionLeafStatements(
@@ -205,9 +240,9 @@ export function createVirtualProductionSequence(
 
         _if.addStatement(_if_leaf);
 
-        _if_leaf = renderItem(_if_leaf, item, options);
+        const { prods, leaf_node } = renderItem(_if_leaf, item, options);
 
-        const prods = processProductionChain(_if_leaf, options, itemsToProductions([item], grammar));
+        _if_leaf = leaf_node;
 
         out_prods.push(...prods);
 

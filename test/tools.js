@@ -95,7 +95,6 @@ export async function getGrammar(string_or_url, parser) {
     if (await url.DOES_THIS_EXIST())
         string = await url.fetchText();
 
-
     return await compileGrammars(string, url + "", parser);
 }
 

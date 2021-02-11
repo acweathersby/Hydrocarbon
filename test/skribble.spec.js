@@ -1,8 +1,8 @@
-import parser_package from "../build/library/parsers/parser.js";
+import { parser_factory } from "../build/library/parsers/parser.js";
 
 
 const
-    parser = parser_package.parser,
+    parser = parser_factory.parser,
     data = `
 [static] lookup_table : Buffer8 = Buffer8(1256)
 [static] sequence_lookup : Buffer8 = Buffer8(212,212)

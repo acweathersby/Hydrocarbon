@@ -86,8 +86,10 @@ export function compileProductionFunctions(
      * to the first transition encountered.
      */
     filter_symbols: Symbol[] = const_EMPTY_ARRAY,
-    IS_VIRTUAL = false
+    IS_VIRTUAL = 0
 ) {
+    if (IS_VIRTUAL > 3) throw new Error("Virtual production depth is too high");
+
     const
 
         initial_items = getProductionItemsThatAreNotRightRecursive(productions, grammar),
@@ -136,7 +138,7 @@ export function generateOptions(
      * The production currently being processed.
      */
     productions: Production[],
-    IS_VIRTUAL: boolean,
+    IS_VIRTUAL: number = 0,
     scope: "RD" | "GOTO" = "RD"
 ): RenderBodyOptions {
     return {

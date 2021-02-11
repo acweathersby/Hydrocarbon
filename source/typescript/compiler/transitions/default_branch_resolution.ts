@@ -220,9 +220,7 @@ function createIfElseBlock(
                 options.called_productions.add(<number>production.id);
 
                 const call_name = createBranchFunction(items.map(i => i.increment()), code, grammar, runner);
-
                 const rc = new SC;
-
                 rc.addStatement(SC.Call("pushFN", "data", call_name));
                 rc.addStatement(SC.Call("pushFN", "data", getProductionFunctionName(production, grammar)));
                 rc.addStatement(SC.UnaryPre(SC.Return, SC.Value("0")));
@@ -332,9 +330,9 @@ function addIfStatementTransition(
 
 
     if (
-        true
+        false
         && traffic.length >= 8
-        && !options.IS_VIRTUAL
+        && options.IS_VIRTUAL == 0
         && breadcrumb_items.every(i => !i.atEND)
         && Math.min(...breadcrumb_items.map(i => i.len)) > 2
     ) {
@@ -354,7 +352,7 @@ function addIfStatementTransition(
             //Add peek
         }
 
-        createVirtualProductionSequence(options, breadcrumb_items, [], sc, leaves, [], true, TRANSITION_TYPE.ASSERT);
+        createVirtualProductionSequence(options, breadcrumb_items, [], sc, leaves, [], true, TRANSITION_TYPE.ASSERT, true);
 
     } else {
 

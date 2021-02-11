@@ -64,9 +64,9 @@ export interface RenderBodyOptions {
     NO_GOTOS: boolean;
 
     /**
-     * If then create a functions sequence for a virtual production
+     * If this number is more than zero, then the we are processing a virtual production
      */
-    IS_VIRTUAL: boolean;
+    IS_VIRTUAL: number;
     /**
      * All items in the grammar that are `S => a . A` for some production `A`
      */
