@@ -1,7 +1,7 @@
 {
     "name": "hctoolkit",
-    "description": "Hydrocarbon Toolkit",
-    "version": "0.0.14",
+    "description": "Hydrocarbon Toolkit - Testing",
+    "version": "0.0.15",
     "bin": {
         "hc": "./bin/index.js"
     },
@@ -34,10 +34,10 @@
         "@candlelib/log": "*",
         "@candlelib/paraffin": "*",
         "@candlelib/uri": "*",
-        "@hctoolkit/grammar": "0.0.6",
-        "@hctoolkit/bytecode": "0.0.9",
-        "@hctoolkit/asytrip": "0.0.8",
-        "@hctoolkit/tools": "0.0.6",
+        "@hctoolkit/grammar": "0.0.7",
+        "@hctoolkit/bytecode": "0.0.10",
+        "@hctoolkit/asytrip": "0.0.9",
+        "@hctoolkit/tools": "0.0.7",
         "@hctoolkit/common": "0.1.2"
     },
     "devDependencies": {
