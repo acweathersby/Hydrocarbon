@@ -63,6 +63,13 @@ export function constructProductionStates(
 
     validateLazyCandidate(options, production);
 
+    /*    
+    if (production.name != "line")
+        return {
+            id: production.id,
+            parse_states: new Map
+        }; //*/
+
     try {
         const
             tt_options: TransitionGraphOptions = {
@@ -98,6 +105,7 @@ export function constructProductionStates(
                 parse_states,
                 root_prod_name
             );
+
         }
 
         {
@@ -167,14 +175,17 @@ export function constructProductionStates(
                 debugger;
             }
         }
+
         return {
             parse_states: parse_states,
             id: production.id,
         };
 
     } catch (e: any) {
-        console.log(e);
-        throw new Error(`Error encountered while compiling [${production.name}]\n${getStartItemsFromProduction(production).map(i => i.rup(grammar)).join("\n\n")} \n${e.stack}`);
+        const error =
+            new Error(`Error encountered while compiling [${production.name}]\n${getStartItemsFromProduction(production).map(i => i.rup(grammar)).join("\n\n")} \n${e.stack}`);
+        console.error(e);
+        throw error;
     }
 }
 
@@ -335,7 +346,10 @@ function generateStateAction(
 
     let post_amble = state.depth == 1 ? ` then goto state [ ${options.production.name}_goto ]` : " ";
 
+
     if (state.children.length == 0) {
+
+
         // This state is a empty state and will never be
         // reached through other parse states.
 
@@ -366,17 +380,19 @@ function generateStateAction(
 
             let action_string = "";
 
+
+
             if ((child.is(TST.I_END) || child.is(TST.I_FAIL)) && state.children.length == 1) {
 
                 action_string = action;
             } else {
-
                 if (child.is(TST.O_PEEK)) {
                     HAVE_PEEK = true;
                     const mode = getSymbolMode(<TokenSymbol>sym, options.IS_SCANNER);
 
-                    if (Sym_Is_A_Token(sym))
-
+                    if (state.children.length == 1 && Sym_Is_DEFAULT(sym))
+                        action_string = `goto state [${hash}]${post_amble}`;
+                    else if (Sym_Is_A_Token(sym))
                         action_string = `peek ${mode} [${sym.id} /* ${create_symbol_comment(sym)} */ ] ( goto state [${hash}]${post_amble})`;
                     else
                         throw new Error(`Invalid peek state on non-token symbol ${convert_symbol_to_friendly_name(sym)}`);
@@ -386,11 +402,18 @@ function generateStateAction(
 
                     if (Sym_Is_Recovery(sym)) {
 
+                        const mode = getSymbolMode(<TokenSymbol>sym, options.IS_SCANNER);
+
                         const item = state.items[0];
 
                         const production = <GrammarProduction>item.getProduction(grammar);
 
-                        action_string = `goto state [ ${user_defined_state_mux}${production.name}_${1 + item.offset} ] then goto state [ ${hash} ]${post_amble}`;
+                        if (state.children.length == 1) {
+                            action_string = `goto state [ ${user_defined_state_mux}${production.name}_${1 + item.offset} ] then goto state [ ${hash} ]${post_amble}`;
+                        } else {
+                            action_string = `assert ${mode} [${getSymbolID(sym, options.IS_SCANNER)} /* ${create_symbol_comment(sym)} */ ] ( goto state [${hash}]${post_amble})`;
+                        }
+
 
                     } else if (Sym_Is_A_Token(sym)) {
 
